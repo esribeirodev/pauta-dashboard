@@ -10,7 +10,7 @@ import DriveUploader from './DriveUploader';
 const STATUS_LABEL = {
   received: 'Recebida',
   in_production: 'Em produção',
-  in_review: 'Em aprovação',
+  in_review: 'Aguardando aprovação final',
   done: 'Concluída',
   archived: 'Arquivada'
 };
@@ -109,11 +109,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
     updateStatus({ status: 'in_production' }, 'start', 'Iniciou a produção.');
 
   const sendToReview = () =>
-    updateStatus(
-      { status: 'in_review' },
-      'to_review',
-      actionNote || 'Enviou para aprovação.'
-    );
+    updateStatus({ status: 'in_review' }, 'to_review', actionNote || 'Enviou para aprovação.');
 
   const forward = () => {
     if (!forwardTo) return alert('Escolha para quem encaminhar.');
@@ -127,11 +123,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
 
   const returnDemand = () => {
     if (!actionNote.trim()) return alert('Descreva o motivo da devolução.');
-    updateStatus(
-      { current_assignee: detail.created_by, status: 'received' },
-      'return',
-      actionNote
-    );
+    updateStatus({ current_assignee: detail.created_by, status: 'received' }, 'return', actionNote);
   };
 
   const approveFinal = () =>
@@ -155,11 +147,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       .maybeSingle();
     if (lastReview?.actor_id) backTo = lastReview.actor_id;
 
-    updateStatus(
-      { status: 'in_production', current_assignee: backTo },
-      'request_changes',
-      actionNote
-    );
+    updateStatus({ status: 'in_production', current_assignee: backTo }, 'request_changes', actionNote);
   };
 
   const sendToFinalReview = () => {
@@ -230,7 +218,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
                 <button type="button" className="secondary" disabled={busy || !finalApprover || !actionNote.trim()} onClick={sendToFinalReview}><ShieldCheck size={15} /> Registrar 1ª aprovação e enviar</button>
               </>}
 
-              {isAdmin(role) && detail.status === 'done' && <button type="button" className="secondary" disabled={busy} onClick={archive}><Archive size={15} /> Arquivar</button>}
+              {(role === 'admin' || role === 'supervisora') && detail.status === 'done' && <button type="button" className="secondary" disabled={busy} onClick={archive}><Archive size={15} /> Arquivar</button>}
             </div>
           </>
         )}
