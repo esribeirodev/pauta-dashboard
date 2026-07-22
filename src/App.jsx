@@ -6,6 +6,7 @@ import {
 import { supabase } from './supabase';
 import { ROLES, ITEM_SELECT } from './constants';
 import { isCreative, isManager } from './utils';
+import { usePermissions } from './hooks/usePermissions';
 import Login from './components/Login';
 import Setup from './components/Setup';
 import Dashboard from './components/Dashboard';
@@ -30,6 +31,18 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(new Date());
+  const [selectedWorkspace, setSelectedWorkspace] = useState('');
+
+  /* Áreas de trabalho e permissões dinâmicas */
+  const { workspaces } = usePermissions(session?.user?.id, profile?.role);
+  const multiArea = workspaces.length > 1;
+
+  useEffect(() => {
+    if (!workspaces.length) return;
+    if (!workspaces.some(ws => ws.id === selectedWorkspace)) {
+      setSelectedWorkspace(workspaces[0].id);
+    }
+  }, [workspaces]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -173,6 +186,12 @@ export default function App() {
 
   if (admin) nav.push(['admin', 'Administração', ShieldCheck]);
 
+  /* Com 2+ áreas visíveis, filtra as demandas pela área selecionada.
+     Com área única (hoje), nada muda. */
+  const visibleItems = multiArea && selectedWorkspace
+    ? items.filter(item => !item.workspace_id || item.workspace_id === selectedWorkspace)
+    : items;
+
   const currentItem = items.find(item => item.id === modal?.id);
 
   return (
@@ -186,6 +205,19 @@ export default function App() {
         </button>
 
         <div className="brand"><i />PAUTA</div>
+
+        {multiArea && (
+          <select
+            className="client-select"
+            value={selectedWorkspace}
+            onChange={event => setSelectedWorkspace(event.target.value)}
+            title="Área de trabalho"
+          >
+            {workspaces.map(ws => (
+              <option value={ws.id} key={ws.id}>{ws.name}</option>
+            ))}
+          </select>
+        )}
 
         {!creative && (
           <select
@@ -263,7 +295,7 @@ export default function App() {
 
           {tab === 'dashboard' && (
             <Dashboard
-              items={items}
+              items={visibleItems}
               role={role}
               user={userId}
               open={id => setModal({ type: 'detail', id })}
@@ -271,12 +303,12 @@ export default function App() {
           )}
 
           {tab === 'production' && (
-            <KanbanManager items={items} open={id => setModal({ type: 'detail', id })} />
+            <KanbanManager items={visibleItems} open={id => setModal({ type: 'detail', id })} />
           )}
 
           {tab === 'tasks' && (
             <KanbanCreative
-              items={items}
+              items={visibleItems}
               user={userId}
               open={id => setModal({ type: 'detail', id })}
             />
@@ -284,14 +316,14 @@ export default function App() {
 
           {tab === 'approvals' && (
             <Approvals
-              items={items}
+              items={visibleItems}
               user={userId}
               open={id => setModal({ type: 'detail', id })}
             />
           )}
 
           {tab === 'calendar' && (
-            <CalendarView items={items} month={month} setMonth={setMonth} />
+            <CalendarView items={visibleItems} month={month} setMonth={setMonth} />
           )}
 
           {tab === 'admin' && (
@@ -312,6 +344,8 @@ export default function App() {
           clientId={selectedClient}
           creator={userId}
           role={role}
+          workspaces={workspaces}
+          workspaceId={selectedWorkspace}
           close={() => setModal(null)}
           saved={refresh}
         />
