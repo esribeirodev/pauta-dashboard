@@ -9,7 +9,10 @@ export default function Approvals({ items, user, open }) {
   return (
     <section className="panel">
       <div className="panel-head">
-        <h2>Sua fila de aprovação</h2>
+        <div>
+          <h2>Sua fila de aprovação final</h2>
+          <p className="sub">Aprovação de duas pessoas: só conclua depois do primeiro aceite registrado.</p>
+        </div>
       </div>
       <ContentList items={queue} open={open} />
     </section>
