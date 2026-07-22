@@ -8,7 +8,7 @@ const preview = id => `https://drive.google.com/file/d/${id}/preview`;
 const view = id => `https://drive.google.com/file/d/${id}/view`;
 
 /* Galeria dos arquivos hospedados no Google Drive */
-export default function DriveGallery({ item }) {
+export default function DriveGallery({ item = {} }) {
   const driveFiles = (item.attachments || []).filter(
     file => file.source === 'drive' && file.drive_file_id
   );
