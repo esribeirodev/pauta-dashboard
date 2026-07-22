@@ -6,9 +6,16 @@ import { ROLES, CREATIVES, TYPE, PRIORITY } from '../constants';
 /*
  * Admin: atribui a QUALQUER usuário ativo (inclusive gestores).
  * Demais gestores: atribuem apenas a criativos.
+ * Área de trabalho: usa a selecionada no header; com 2+ áreas visíveis
+ * o usuário pode trocar aqui. Se vier vazia, o trigger do banco resolve.
  */
-export default function NewDemand({ users, clients, clientId, creator, role, close, saved }) {
+export default function NewDemand({
+  users, clients, clientId, creator, role,
+  workspaces = [], workspaceId = '',
+  close, saved
+}) {
   const isAdmin = role === 'admin';
+  const multiArea = workspaces.length > 1;
 
   const [form, setForm] = useState({
     title: '',
@@ -18,7 +25,8 @@ export default function NewDemand({ users, clients, clientId, creator, role, clo
     priority: 'media',
     area: 'design',
     assignee: '',
-    clientId: clientId || ''
+    clientId: clientId || '',
+    workspaceId: workspaceId || workspaces[0]?.id || ''
   });
   const [files, setFiles] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -53,7 +61,8 @@ export default function NewDemand({ users, clients, clientId, creator, role, clo
         due_at: form.due || null,
         priority: form.priority,
         created_by: creator,
-        status: 'received'
+        status: 'received',
+        workspace_id: form.workspaceId || null
       })
       .select()
       .single();
@@ -106,6 +115,21 @@ export default function NewDemand({ users, clients, clientId, creator, role, clo
           <h2>Nova demanda</h2>
           <button type="button" className="icon" onClick={close}><X /></button>
         </div>
+
+        {multiArea && (
+          <label>
+            Área de trabalho
+            <select
+              required
+              value={form.workspaceId}
+              onChange={e => set('workspaceId', e.target.value)}
+            >
+              {workspaces.map(ws => (
+                <option value={ws.id} key={ws.id}>{ws.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label>
           Cliente
