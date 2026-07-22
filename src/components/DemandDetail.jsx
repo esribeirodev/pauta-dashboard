@@ -75,11 +75,12 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       comment: comment || null
     });
     if (notifyUserId) {
-      await supabase.from('notifications').insert({
-        user_id: notifyUserId,
-        content_id: detail.id,
-        message: notifyMessage
-      });
+      /*
+       * Notificações são criadas automaticamente por triggers do banco
+       * (notify_new_assignee, notify_on_done, on_comment_created).
+       * Insert manual removido: a tabela não tem coluna "message" e a RLS
+       * só permite inserir notificações para o próprio usuário.
+       */
     }
   }
 
