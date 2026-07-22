@@ -52,7 +52,7 @@ export default function DriveUploader({ item, onDone }) {
 
       try {
         const { data: session, error } = await supabase.functions.invoke(
-          'drive-manager',
+          'drive-manage',
           {
             body: {
               action: 'create_upload_session',
@@ -73,7 +73,7 @@ export default function DriveUploader({ item, onDone }) {
         );
 
         const { data: fin, error: finError } = await supabase.functions.invoke(
-          'drive-manager',
+          'drive-manage',
           {
             body: {
               action: 'finalize_file',
