@@ -20,30 +20,18 @@ const allowedRoles = [
 
 Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: corsHeaders,
-    });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   if (request.method !== "POST") {
-    return json(
-      {
-        error: "Método não permitido. Use POST.",
-      },
-      405,
-    );
+    return json({ error: "Método não permitido. Use POST." }, 405);
   }
 
   try {
     const authorization = request.headers.get("Authorization");
 
     if (!authorization) {
-      return json(
-        {
-          error: "Autorização ausente.",
-        },
-        401,
-      );
+      return json({ error: "Autorização ausente." }, 401);
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -52,9 +40,7 @@ Deno.serve(async (request: Request) => {
 
     if (!supabaseUrl || !anonKey || !serviceRoleKey) {
       return json(
-        {
-          error: "Secrets da Edge Function não foram configurados.",
-        },
+        { error: "Secrets da Edge Function não foram configurados." },
         500,
       );
     }
@@ -63,48 +49,31 @@ Deno.serve(async (request: Request) => {
      * Cliente com a sessão do usuário atual.
      * Serve para identificar quem fez a requisição.
      */
-    const userClient = createClient(
-      supabaseUrl,
-      anonKey,
-      {
-        global: {
-          headers: {
-            Authorization: authorization,
-          },
-        },
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: {
+        headers: { Authorization: authorization },
       },
-    );
+    });
 
     const {
-      data: {
-        user: requester,
-      },
+      data: { user: requester },
       error: requesterError,
     } = await userClient.auth.getUser();
 
     if (requesterError || !requester) {
-      return json(
-        {
-          error: "Sessão inválida ou expirada.",
-        },
-        401,
-      );
+      return json({ error: "Sessão inválida ou expirada." }, 401);
     }
 
     /*
      * Cliente administrativo.
      * A service_role nunca deve ser exposta no frontend.
      */
-    const adminClient = createClient(
-      supabaseUrl,
-      serviceRoleKey,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
+    const adminClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
-    );
+    });
 
     const {
       data: requesterProfile,
@@ -122,10 +91,7 @@ Deno.serve(async (request: Request) => {
       requesterProfile.active !== true
     ) {
       return json(
-        {
-          error:
-            "Somente um Administrador ativo pode realizar esta operação.",
-        },
+        { error: "Somente um Administrador ativo pode realizar esta operação." },
         403,
       );
     }
@@ -135,20 +101,11 @@ Deno.serve(async (request: Request) => {
     try {
       body = await request.json();
     } catch {
-      return json(
-        {
-          error: "Corpo da requisição inválido.",
-        },
-        400,
-      );
+      return json({ error: "Corpo da requisição inválido." }, 400);
     }
 
     const action = String(body.action || "").trim();
 
-    /*
-     * Aceita tanto "create" quanto "create_user",
-     * para funcionar com versões diferentes do frontend.
-     */
     switch (action) {
       case "create":
       case "create_user":
@@ -157,27 +114,17 @@ Deno.serve(async (request: Request) => {
       case "update_profile":
         return await updateProfile(adminClient, body);
 
+      case "set_password":
+        return await setPassword(adminClient, body);
+
       case "set_active":
-        return await setUserActive(
-          adminClient,
-          body,
-          requester.id,
-        );
+        return await setUserActive(adminClient, body, requester.id);
 
       case "delete":
-        return await deleteUser(
-          adminClient,
-          body,
-          requester.id,
-        );
+        return await deleteUser(adminClient, body, requester.id);
 
       default:
-        return json(
-          {
-            error: "Ação inválida.",
-          },
-          400,
-        );
+        return json({ error: "Ação inválida." }, 400);
     }
   } catch (error) {
     console.error("Erro inesperado na Edge Function:", error);
@@ -198,68 +145,35 @@ async function createUser(
   body: Record<string, unknown>,
 ): Promise<Response> {
   const email = String(body.email || "").trim().toLowerCase();
-
-  const fullName = String(
-    body.fullName ||
-    body.name ||
-    "",
-  ).trim();
-
+  const fullName = String(body.fullName || body.name || "").trim();
   const role = String(body.role || "").trim();
-
-  const password = body.password
-    ? String(body.password)
-    : "";
+  const password = body.password ? String(body.password) : "";
 
   if (!email || !fullName || !role) {
-    return json(
-      {
-        error: "Nome, e-mail e cargo são obrigatórios.",
-      },
-      400,
-    );
+    return json({ error: "Nome, e-mail e cargo são obrigatórios." }, 400);
   }
 
   if (!isValidEmail(email)) {
-    return json(
-      {
-        error: "Informe um e-mail válido.",
-      },
-      400,
-    );
+    return json({ error: "Informe um e-mail válido." }, 400);
   }
 
   if (!allowedRoles.includes(role)) {
-    return json(
-      {
-        error: "Cargo inválido.",
-      },
-      400,
-    );
+    return json({ error: "Cargo inválido." }, 400);
   }
 
   if (password && password.length < 8) {
-    return json(
-      {
-        error: "A senha deve ter pelo menos 8 caracteres.",
-      },
-      400,
-    );
+    return json({ error: "A senha deve ter pelo menos 8 caracteres." }, 400);
   }
 
   const createPayload: {
     email: string;
     email_confirm: boolean;
-    user_metadata: {
-      full_name: string;
-    };
+    user_metadata: { full_name: string };
     password?: string;
   } = {
     email,
     email_confirm: true,
-    user_metadata: {
-      full_name: fullName,
-    },
+    user_metadata: { full_name: fullName },
   };
 
   if (password) {
@@ -269,24 +183,16 @@ async function createUser(
   const {
     data: authData,
     error: authError,
-  } = await adminClient.auth.admin.createUser(
-    createPayload,
-  );
+  } = await adminClient.auth.admin.createUser(createPayload);
 
   if (authError || !authData.user) {
     return json(
-      {
-        error:
-          authError?.message ||
-          "Não foi possível criar o usuário.",
-      },
+      { error: authError?.message || "Não foi possível criar o usuário." },
       400,
     );
   }
 
-  const {
-    error: profileError,
-  } = await adminClient
+  const { error: profileError } = await adminClient
     .from("profiles")
     .insert({
       id: authData.user.id,
@@ -299,16 +205,9 @@ async function createUser(
     /*
      * Evita deixar usuário no Auth sem registro em profiles.
      */
-    await adminClient.auth.admin.deleteUser(
-      authData.user.id,
-    );
+    await adminClient.auth.admin.deleteUser(authData.user.id);
 
-    return json(
-      {
-        error: profileError.message,
-      },
-      400,
-    );
+    return json({ error: profileError.message }, 400);
   }
 
   return json(
@@ -331,36 +230,18 @@ async function updateProfile(
   body: Record<string, unknown>,
 ): Promise<Response> {
   const userId = String(body.userId || "").trim();
-
-  const fullName = String(
-    body.fullName ||
-    body.name ||
-    "",
-  ).trim();
-
+  const fullName = String(body.fullName || body.name || "").trim();
   const role = String(body.role || "").trim();
 
   if (!userId || !fullName || !role) {
-    return json(
-      {
-        error: "Usuário, nome e cargo são obrigatórios.",
-      },
-      400,
-    );
+    return json({ error: "Usuário, nome e cargo são obrigatórios." }, 400);
   }
 
   if (!allowedRoles.includes(role)) {
-    return json(
-      {
-        error: "Cargo inválido.",
-      },
-      400,
-    );
+    return json({ error: "Cargo inválido." }, 400);
   }
 
-  const {
-    error: profileError,
-  } = await adminClient
+  const { error: profileError } = await adminClient
     .from("profiles")
     .update({
       full_name: fullName,
@@ -370,37 +251,53 @@ async function updateProfile(
     .eq("id", userId);
 
   if (profileError) {
-    return json(
-      {
-        error: profileError.message,
-      },
-      400,
-    );
+    return json({ error: profileError.message }, 400);
   }
 
-  const {
-    error: authError,
-  } = await adminClient.auth.admin.updateUserById(
+  const { error: authError } = await adminClient.auth.admin.updateUserById(
     userId,
     {
-      user_metadata: {
-        full_name: fullName,
-      },
+      user_metadata: { full_name: fullName },
     },
   );
 
   if (authError) {
-    return json(
-      {
-        error: authError.message,
-      },
-      400,
-    );
+    return json({ error: authError.message }, 400);
   }
 
   return json({
     success: true,
     message: "Perfil atualizado com sucesso.",
+  });
+}
+
+async function setPassword(
+  adminClient: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const userId = String(body.userId || "").trim();
+  const password = body.password ? String(body.password) : "";
+
+  if (!userId || !password) {
+    return json({ error: "Usuário e nova senha são obrigatórios." }, 400);
+  }
+
+  if (password.length < 8) {
+    return json({ error: "A senha deve ter pelo menos 8 caracteres." }, 400);
+  }
+
+  const { error: authError } = await adminClient.auth.admin.updateUserById(
+    userId,
+    { password },
+  );
+
+  if (authError) {
+    return json({ error: authError.message }, 400);
+  }
+
+  return json({
+    success: true,
+    message: "Senha redefinida com sucesso.",
   });
 }
 
@@ -413,26 +310,14 @@ async function setUserActive(
   const active = body.active;
 
   if (!userId || typeof active !== "boolean") {
-    return json(
-      {
-        error: "Usuário e status são obrigatórios.",
-      },
-      400,
-    );
+    return json({ error: "Usuário e status são obrigatórios." }, 400);
   }
 
   if (userId === requesterId && active === false) {
-    return json(
-      {
-        error: "Você não pode desativar a própria conta.",
-      },
-      400,
-    );
+    return json({ error: "Você não pode desativar a própria conta." }, 400);
   }
 
-  const {
-    error: profileError,
-  } = await adminClient
+  const { error: profileError } = await adminClient
     .from("profiles")
     .update({
       active,
@@ -441,35 +326,21 @@ async function setUserActive(
     .eq("id", userId);
 
   if (profileError) {
-    return json(
-      {
-        error: profileError.message,
-      },
-      400,
-    );
+    return json({ error: profileError.message }, 400);
   }
 
   /*
    * Bloqueia ou desbloqueia o login no Auth.
    */
-  const {
-    error: authError,
-  } = await adminClient.auth.admin.updateUserById(
+  const { error: authError } = await adminClient.auth.admin.updateUserById(
     userId,
     {
-      ban_duration: active
-        ? "none"
-        : "876000h",
+      ban_duration: active ? "none" : "876000h",
     },
   );
 
   if (authError) {
-    return json(
-      {
-        error: authError.message,
-      },
-      400,
-    );
+    return json({ error: authError.message }, 400);
   }
 
   return json({
@@ -489,21 +360,11 @@ async function deleteUser(
   const userId = String(body.userId || "").trim();
 
   if (!userId) {
-    return json(
-      {
-        error: "ID do usuário é obrigatório.",
-      },
-      400,
-    );
+    return json({ error: "ID do usuário é obrigatório." }, 400);
   }
 
   if (userId === requesterId) {
-    return json(
-      {
-        error: "Você não pode excluir a própria conta.",
-      },
-      400,
-    );
+    return json({ error: "Você não pode excluir a própria conta." }, 400);
   }
 
   const {
@@ -516,45 +377,39 @@ async function deleteUser(
     .maybeSingle();
 
   if (targetProfileError) {
-    return json(
-      {
-        error: targetProfileError.message,
-      },
-      400,
-    );
+    return json({ error: targetProfileError.message }, 400);
   }
 
   if (!targetProfile) {
-    return json(
-      {
-        error: "Perfil do usuário não encontrado.",
-      },
-      404,
-    );
+    return json({ error: "Perfil do usuário não encontrado." }, 404);
   }
 
-  const {
-    error: authError,
-  } = await adminClient.auth.admin.deleteUser(
-    userId,
-  );
+  const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
 
   if (authError) {
-    return json(
-      {
-        error: authError.message,
-      },
-      400,
-    );
+    return json({ error: authError.message }, 400);
   }
 
   /*
    * Caso não exista cascade no banco, remove o perfil manualmente.
    */
-  await adminClient
+  const { error: profileDeleteError } = await adminClient
     .from("profiles")
     .delete()
     .eq("id", userId);
+
+  if (profileDeleteError) {
+    return json(
+      {
+        error:
+          `Usuário removido do Auth, mas o perfil não pôde ser excluído: ` +
+          `${profileDeleteError.message}. ` +
+          "Provavelmente possui demandas ou comentários vinculados — " +
+          "prefira desativar usuários com histórico.",
+      },
+      400,
+    );
+  }
 
   return json({
     success: true,
@@ -566,10 +421,7 @@ function isValidEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function json(
-  body: unknown,
-  status = 200,
-): Response {
+function json(body: unknown, status = 200): Response {
   return new Response(
     JSON.stringify(body),
     {
