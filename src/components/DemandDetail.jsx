@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Send, CornerUpLeft, CheckCircle2, PlayCircle, Archive } from 'lucide-react';
 import { supabase } from '../supabase';
+import { ITEM_SELECT } from '../constants';
 import CommentBox from './CommentBox';
 import HistoryTimeline from './HistoryTimeline';
 import DriveGallery from './DriveGallery';     /* AJUSTE AQUI se o nome for outro */
@@ -25,7 +26,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
   const [busy, setBusy] = useState(false);
   const [timelineKey, setTimelineKey] = useState(0);
 
-  const isCurrent = detail.assignee_id === user;
+  const isCurrent = detail.current_assignee === user;
   const isAdmin = role === 'admin' || role === 'supervisora';
   const isFinished = detail.status === 'done' || detail.status === 'archived';
 
@@ -46,8 +47,8 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
 
   async function reload() {
     const { data } = await supabase
-      .from('contents')
-      .select('*, creator:profiles!created_by(full_name), assignee:profiles!assignee_id(full_name)')
+      .from('content_items')
+      .select(ITEM_SELECT)
       .eq('id', detail.id)
       .single();
     if (data) setDetail(data);
@@ -84,7 +85,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
 
   async function updateStatus(patch, eventType, comment, notifyUserId, notifyMessage) {
     setBusy(true);
-    const { error } = await supabase.from('contents').update(patch).eq('id', detail.id);
+    const { error } = await supabase.from('content_items').update(patch).eq('id', detail.id);
     if (error) {
       setBusy(false);
       alert(error.message);
@@ -113,7 +114,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
     if (!forwardTo) return alert('Escolha para quem encaminhar.');
     const target = people.find(person => person.id === forwardTo);
     updateStatus(
-      { assignee_id: forwardTo, status: 'received' },
+      { current_assignee: forwardTo, status: 'received' },
       'forward',
       actionNote || `Encaminhou para ${target?.full_name || 'outro membro'}.`,
       forwardTo,
@@ -124,7 +125,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
   const returnDemand = () => {
     if (!actionNote.trim()) return alert('Descreva o motivo da devolução.');
     updateStatus(
-      { assignee_id: detail.created_by, status: 'received' },
+      { current_assignee: detail.created_by, status: 'received' },
       'return',
       actionNote,
       detail.created_by !== user ? detail.created_by : null,
@@ -137,7 +138,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       { status: 'done' },
       'approve',
       actionNote || 'Demanda aprovada e concluída.',
-      detail.assignee_id !== user ? detail.assignee_id : null,
+      detail.current_assignee !== user ? detail.current_assignee : null,
       `"${detail.title}" foi aprovada. 🎉`
     );
 
@@ -147,7 +148,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       { status: 'in_production' },
       'request_changes',
       actionNote,
-      detail.assignee_id !== user ? detail.assignee_id : null,
+      detail.current_assignee !== user ? detail.current_assignee : null,
       `"${detail.title}" precisa de ajustes: ${actionNote.slice(0, 120)}`
     );
   };
@@ -160,7 +161,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       <div className="modal" style={{ width: 'min(640px,100%)', maxHeight: '90vh', overflow: 'auto' }}>
         <div className="modal-head">
           <div>
-            <p className="eyebrow">{detail.format || 'Demanda'}</p>
+            <p className="eyebrow">{detail.content_type || 'Demanda'}</p>
             <h2>{detail.title}</h2>
           </div>
           <button
@@ -182,7 +183,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
             </p>
           </div>
           <div><b>Criada por</b><p>{detail.creator?.full_name || '—'}</p></div>
-          <div><b>Prazo</b><p>{local(detail.deadline)}</p></div>
+          <div><b>Prazo</b><p>{local(detail.due_at)}</p></div>
           <div><b>Responsável atual</b><p>{detail.assignee?.full_name || '—'}</p></div>
         </div>
 
