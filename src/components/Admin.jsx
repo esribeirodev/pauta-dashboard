@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { ROLES } from '../constants';
+import WorkspaceAdmin from './WorkspaceAdmin';
 
 export default function Admin({ users, clients, reload, setNotice }) {
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'design', password: '' });
@@ -192,6 +193,9 @@ export default function Admin({ users, clients, reload, setNotice }) {
           <div className="empty">Nenhum cliente encontrado.</div>
         )}
       </section>
+
+      {/* Áreas de trabalho, cargos e membros (Fase 3) */}
+      <WorkspaceAdmin users={users} setNotice={setNotice} />
     </div>
   );
 }
