@@ -9,11 +9,12 @@ export const ROLES = {
 
 export const MANAGERS = ['admin', 'supervisora', 'estrategista'];
 export const CREATIVES = ['design', 'editora', 'videomaker'];
+export const FINAL_APPROVERS = ['admin', 'supervisora'];
 
 export const STATUS = {
   received: 'Recebida',
   in_production: 'Em produção',
-  in_review: 'Em aprovação',
+  in_review: 'Aguardando aprovação final',
   done: 'Concluída',
   archived: 'Arquivada'
 };
@@ -27,11 +28,6 @@ export const PRIORITY = {
 
 export const TYPE = ['CARD', 'STORY', 'REELS', 'REELS EM COLLAB'];
 
-/*
- * Para quem cada perfil pode ENCAMINHAR uma demanda
- * (além do requisitante, sempre disponível).
- * Gestores agora alcançam criativos (distribuição de trabalho).
- */
 export const FORWARD_TARGETS = {
   design: ['estrategista', 'supervisora', 'admin'],
   editora: ['estrategista', 'supervisora', 'admin'],
