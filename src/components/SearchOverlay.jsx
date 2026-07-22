@@ -51,9 +51,10 @@ export default function SearchOverlay({ clientId, onOpen, onClose }) {
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       let request = supabase
-        .from('contents')
-        .select('id, title, status, priority, deadline, assignee:profiles!assignee_id(full_name)')
+        .from('content_items')
+        .select('id, title, status, priority, due_at, assignee:profiles!current_assignee(full_name)')
         .or(`title.ilike.%${term}%,briefing.ilike.%${term}%`)
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(12);
       if (clientId) request = request.eq('client_id', clientId);
@@ -108,7 +109,7 @@ export default function SearchOverlay({ clientId, onOpen, onClose }) {
             <div className="search-item-main">
               <b>{demand.title}</b>
               <small>
-                {demand.assignee?.full_name || 'Sem responsável'} · prazo {local(demand.deadline)}
+                {demand.assignee?.full_name || 'Sem responsável'} · prazo {local(demand.due_at)}
               </small>
             </div>
             <span className="search-item-side">
