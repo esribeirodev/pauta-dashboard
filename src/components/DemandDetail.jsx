@@ -17,7 +17,7 @@ const STATUS_LABEL = {
 const local = iso =>
   iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
-export default function DemandDetail({ item, user, role, onClose, onChanged }) {
+export default function DemandDetail({ item, user, role, onClose, onChanged, close: closeProp, saved }) {
   const [detail, setDetail] = useState(item);
   const [people, setPeople] = useState([]);
   const [forwardTo, setForwardTo] = useState('');
@@ -31,8 +31,9 @@ export default function DemandDetail({ item, user, role, onClose, onChanged }) {
 
   /* Fechamento robusto: aviso se a prop faltar + Esc fecha */
   function close() {
-    if (typeof onClose === 'function') onClose();
-    else console.warn('DemandDetail: prop onClose ausente — verifique como o componente é chamado no pai.');
+    const handleClose = onClose || closeProp;
+    if (typeof handleClose === 'function') handleClose();
+    else console.warn('DemandDetail: prop onClose/close ausente — verifique como o componente é chamado no pai.');
   }
 
   useEffect(() => {
@@ -51,7 +52,8 @@ export default function DemandDetail({ item, user, role, onClose, onChanged }) {
       .single();
     if (data) setDetail(data);
     setTimelineKey(key => key + 1);
-    if (onChanged) onChanged();
+    const handleChanged = onChanged || saved;
+    if (handleChanged) handleChanged();
   }
 
   useEffect(() => {
@@ -191,7 +193,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged }) {
           </div>
         )}
 
-        <DriveGallery contentId={detail.id} folderId={detail.drive_folder_id} />
+        <DriveGallery item={detail} />
         {isCurrent && !isFinished && (
           <DriveUploader contentId={detail.id} folderId={detail.drive_folder_id} onUploaded={reload} />
         )}
