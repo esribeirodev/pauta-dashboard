@@ -1,27 +1,33 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { ROLES } from '../constants';
-import WorkspaceAdmin from './WorkspaceAdmin';
 
 export default function Admin({ users, clients, reload, setNotice }) {
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'design', password: '' });
   const [newClient, setNewClient] = useState('');
+  const [editingUser, setEditingUser] = useState(null);
+
+  async function invokeAdmin(body) {
+    const { data, error } = await supabase.functions.invoke('admin-users', { body });
+    if (error || data?.error) {
+      throw new Error(error?.message || data?.error || 'Não foi possível concluir a operação.');
+    }
+    return data;
+  }
+
+  /* ---------- Usuários ---------- */
 
   async function toggleUser(user) {
     const action = user.active ? 'desativar' : 'reativar';
     if (!window.confirm(`Deseja ${action} o usuário "${user.full_name}"?`)) return;
 
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'set_active', userId: user.id, active: !user.active }
-    });
-
-    if (error || data?.error) {
-      setNotice(error?.message || data?.error || 'Não foi possível alterar o usuário.');
-      return;
+    try {
+      await invokeAdmin({ action: 'set_active', userId: user.id, active: !user.active });
+      setNotice(user.active ? 'Usuário desativado com sucesso.' : 'Usuário reativado com sucesso.');
+      await reload();
+    } catch (err) {
+      setNotice(err.message);
     }
-
-    setNotice(user.active ? 'Usuário desativado com sucesso.' : 'Usuário reativado com sucesso.');
-    await reload();
   }
 
   async function createUser(event) {
@@ -36,25 +42,84 @@ export default function Admin({ users, clients, reload, setNotice }) {
       return;
     }
 
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: {
+    try {
+      await invokeAdmin({
         action: 'create',
         email: newUser.email.trim(),
         fullName: newUser.name.trim(),
         role: newUser.role,
         password: newUser.password
-      }
-    });
+      });
+      alert('Usuário criado com sucesso.');
+      setNewUser({ email: '', name: '', role: 'design', password: '' });
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
 
-    if (error || data?.error) {
-      alert(error?.message || data?.error || 'Não foi possível criar o usuário.');
+  function startEditUser(user) {
+    setEditingUser({ id: user.id, name: user.full_name, role: user.role });
+  }
+
+  async function saveEditUser(event) {
+    event.preventDefault();
+    if (!editingUser?.name.trim()) {
+      alert('Informe o nome do usuário.');
       return;
     }
 
-    alert('Usuário criado com sucesso.');
-    setNewUser({ email: '', name: '', role: 'design', password: '' });
-    await reload();
+    try {
+      await invokeAdmin({
+        action: 'update_profile',
+        userId: editingUser.id,
+        fullName: editingUser.name.trim(),
+        role: editingUser.role
+      });
+      setNotice('Perfil atualizado com sucesso.');
+      setEditingUser(null);
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
   }
+
+  async function resetPassword(user) {
+    const password = window.prompt(`Nova senha para "${user.full_name}" (mínimo 8 caracteres):`);
+    if (password === null) return;
+    if (password.length < 8) {
+      alert('A senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+
+    try {
+      await invokeAdmin({ action: 'set_password', userId: user.id, password });
+      setNotice(`Senha de "${user.full_name}" redefinida com sucesso.`);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function deleteUser(user) {
+    const typed = window.prompt(
+      `⚠️ Esta ação é PERMANENTE e não pode ser desfeita.\n\nPara excluir, digite o nome exato do usuário:\n"${user.full_name}"`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== user.full_name) {
+      alert('O nome digitado não confere. Exclusão cancelada.');
+      return;
+    }
+
+    try {
+      await invokeAdmin({ action: 'delete', userId: user.id });
+      setNotice('Usuário excluído com sucesso.');
+      await reload();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  /* ---------- Clientes ---------- */
 
   async function addClient(event) {
     event.preventDefault();
@@ -105,6 +170,44 @@ export default function Admin({ users, clients, reload, setNotice }) {
     await reload();
   }
 
+  async function deleteClient(client) {
+    const { count, error: countError } = await supabase
+      .from('content_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', client.id);
+
+    if (countError) {
+      setNotice(countError.message);
+      return;
+    }
+
+    if (count > 0) {
+      alert(
+        `O cliente "${client.name}" possui ${count} demanda(s) vinculada(s) e não pode ser excluído.\n` +
+        'Desative-o para preservar o histórico.'
+      );
+      return;
+    }
+
+    const typed = window.prompt(
+      `⚠️ Esta ação é PERMANENTE e não pode ser desfeita.\n\nPara excluir, digite o nome exato do cliente:\n"${client.name}"`
+    );
+    if (typed === null) return;
+    if (typed.trim() !== client.name) {
+      alert('O nome digitado não confere. Exclusão cancelada.');
+      return;
+    }
+
+    const { error } = await supabase.from('clients').delete().eq('id', client.id);
+    if (error) {
+      setNotice(error.message);
+      return;
+    }
+
+    setNotice('Cliente excluído com sucesso.');
+    await reload();
+  }
+
   return (
     <div className="admin-grid">
       <section className="panel">
@@ -114,20 +217,52 @@ export default function Admin({ users, clients, reload, setNotice }) {
         <div className="table">
           {users.map(user => (
             <div className="row" key={user.id}>
-              <div className="title">
-                <b>{user.full_name}</b>
-                <small>{ROLES[user.role] || user.role}</small>
-              </div>
-              <span className={user.active ? 'badge active' : 'badge inactive'}>
-                {user.active ? 'Ativo' : 'Inativo'}
-              </span>
-              <button
-                type="button"
-                className={user.active ? 'danger' : 'primary'}
-                onClick={() => toggleUser(user)}
-              >
-                {user.active ? 'Desativar' : 'Reativar'}
-              </button>
+              {editingUser?.id === user.id ? (
+                <form onSubmit={saveEditUser} className="form-grid" style={{ flex: 1 }}>
+                  <input
+                    required placeholder="Nome completo" value={editingUser.name}
+                    onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+                  />
+                  <select
+                    value={editingUser.role}
+                    onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                  >
+                    {Object.entries(ROLES).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                  <button className="primary" type="submit">Salvar</button>
+                  <button className="secondary" type="button" onClick={() => setEditingUser(null)}>
+                    Cancelar
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <div className="title">
+                    <b>{user.full_name}</b>
+                    <small>{ROLES[user.role] || user.role}</small>
+                  </div>
+                  <span className={user.active ? 'badge active' : 'badge inactive'}>
+                    {user.active ? 'Ativo' : 'Inativo'}
+                  </span>
+                  <button type="button" className="secondary" onClick={() => startEditUser(user)}>
+                    Editar
+                  </button>
+                  <button type="button" className="secondary" onClick={() => resetPassword(user)}>
+                    Senha
+                  </button>
+                  <button
+                    type="button"
+                    className={user.active ? 'danger' : 'primary'}
+                    onClick={() => toggleUser(user)}
+                  >
+                    {user.active ? 'Desativar' : 'Reativar'}
+                  </button>
+                  <button type="button" className="danger" onClick={() => deleteUser(user)}>
+                    Excluir
+                  </button>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -186,6 +321,7 @@ export default function Admin({ users, clients, reload, setNotice }) {
                 >
                   {client.active ? 'Desativar' : 'Reativar'}
                 </button>
+                <button className="danger" onClick={() => deleteClient(client)}>Excluir</button>
               </div>
             </div>
           ))
@@ -193,9 +329,6 @@ export default function Admin({ users, clients, reload, setNotice }) {
           <div className="empty">Nenhum cliente encontrado.</div>
         )}
       </section>
-
-      {/* Áreas de trabalho, cargos e membros (Fase 3) */}
-      <WorkspaceAdmin users={users} setNotice={setNotice} />
     </div>
   );
 }
