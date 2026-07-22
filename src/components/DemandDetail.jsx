@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Send, CornerUpLeft, CheckCircle2, PlayCircle, Archive, ShieldCheck } from 'lucide-react';
+import { X, Send, CornerUpLeft, CheckCircle2, PlayCircle, Archive } from 'lucide-react';
 import { supabase } from '../supabase';
 import { ITEM_SELECT } from '../constants';
 import CommentBox from './CommentBox';
@@ -22,7 +22,6 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
   const [detail, setDetail] = useState(item);
   const [people, setPeople] = useState([]);
   const [forwardTo, setForwardTo] = useState('');
-  const [finalApprover, setFinalApprover] = useState('');
   const [actionNote, setActionNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [timelineKey, setTimelineKey] = useState(0);
@@ -30,11 +29,6 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
   const isCurrent = detail.current_assignee === user;
   const isAdmin = role === 'admin' || role === 'supervisora';
   const isFinished = detail.status === 'done' || detail.status === 'archived';
-
-  /* Quem pode dar a aprovação final (2ª aprovação, opcional) */
-  const finalApprovers = people.filter(
-    person => ['admin', 'supervisora'].includes(person.role) && person.id !== detail.current_assignee
-  );
 
   /* Fechamento robusto: aviso se a prop faltar + Esc fecha */
   function close() {
@@ -80,14 +74,12 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       event_type: eventType,
       comment: comment || null
     });
-    if (notifyUserId) {
-      /*
-       * Notificações são criadas automaticamente por triggers do banco
-       * (notify_new_assignee, notify_on_done, on_comment_created).
-       * Insert manual removido: a tabela não tem coluna "message" e a RLS
-       * só permite inserir notificações para o próprio usuário.
-       */
-    }
+    /*
+     * Notificações são criadas automaticamente por triggers do banco
+     * (notify_new_assignee, notify_on_done, on_comment_created).
+     * O insert manual foi removido: a tabela não possui coluna "message"
+     * e a RLS só permite inserir notificações para o próprio usuário.
+     */
   }
 
   async function updateStatus(patch, eventType, comment, notifyUserId, notifyMessage) {
@@ -101,7 +93,6 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
     await logEvent(eventType, comment, notifyUserId, notifyMessage);
     setActionNote('');
     setForwardTo('');
-    setFinalApprover('');
     setBusy(false);
     await reload();
   }
@@ -115,7 +106,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       'to_review',
       actionNote || 'Enviou para aprovação.',
       detail.created_by !== user ? detail.created_by : null,
-      `\"${detail.title}\" foi enviada para aprovação.`
+      `"${detail.title}" foi enviada para aprovação.`
     );
 
   const forward = () => {
@@ -126,7 +117,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       'forward',
       actionNote || `Encaminhou para ${target?.full_name || 'outro membro'}.`,
       forwardTo,
-      `A demanda \"${detail.title}\" agora está sob sua responsabilidade.`
+      `A demanda "${detail.title}" agora está sob sua responsabilidade.`
     );
   };
 
@@ -137,7 +128,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       'return',
       actionNote,
       detail.created_by !== user ? detail.created_by : null,
-      `\"${detail.title}\" foi devolvida: ${actionNote.slice(0, 120)}`
+      `"${detail.title}" foi devolvida: ${actionNote.slice(0, 120)}`
     );
   };
 
@@ -147,52 +138,17 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       'approve',
       actionNote || 'Demanda aprovada e concluída.',
       detail.current_assignee !== user ? detail.current_assignee : null,
-      `\"${detail.title}\" foi aprovada. 🎉`
+      `"${detail.title}" foi aprovada. 🎉`
     );
 
-  /*
-   * Aprovação dupla (OPCIONAL): registra o \"ok\" de quem está aprovando
-   * e passa a demanda para a aprovação final de uma supervisora/admin.
-   * O status continua in_review; a pessoa escolhida conclui com \"Aprovar\".
-   */
-  const sendToFinalReview = () => {
-    if (!finalApprover) return alert('Escolha quem fará a aprovação final.');
-    const target = people.find(person => person.id === finalApprover);
-    const base = `Aprovou e enviou para aprovação final de ${target?.full_name || 'gestor(a)'}.`;
-    updateStatus(
-      { current_assignee: finalApprover },
-      'forward',
-      actionNote ? `${base} ${actionNote}` : base,
-      finalApprover,
-      `\"${detail.title}\" aguarda sua aprovação final.`
-    );
-  };
-
-  const requestChanges = async () => {
+  const requestChanges = () => {
     if (!actionNote.trim()) return alert('Descreva os ajustes necessários.');
-
-    /*
-     * Devolve a produção para quem enviou o material (último to_review),
-     * e não para quem estiver com a demanda no momento — importante quando
-     * ela foi passada para aprovação final de outra pessoa.
-     */
-    let backTo = detail.current_assignee;
-    const { data: lastReview } = await supabase
-      .from('content_events')
-      .select('actor_id')
-      .eq('content_id', detail.id)
-      .eq('event_type', 'to_review')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (lastReview?.actor_id) backTo = lastReview.actor_id;
-
     updateStatus(
-      { status: 'in_production', current_assignee: backTo },
+      { status: 'in_production' },
       'request_changes',
       actionNote,
-      backTo !== user ? backTo : null,
-      `\"${detail.title}\" precisa de ajustes: ${actionNote.slice(0, 120)}`
+      detail.current_assignee !== user ? detail.current_assignee : null,
+      `"${detail.title}" precisa de ajustes: ${actionNote.slice(0, 120)}`
     );
   };
 
@@ -239,7 +195,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
 
         <DriveGallery item={detail} />
         {isCurrent && !isFinished && (
-          <DriveUploader contentId={detail.id} folderId={detail.drive_folder_id} onUploaded={reload} />
+          <DriveUploader item={detail} onDone={reload} />
         )}
 
         {!isFinished && (isCurrent || isAdmin) && (
@@ -301,28 +257,6 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
                 </button>
               )}
             </div>
-
-            {/* Aprovação dupla OPCIONAL: em vez de concluir, subir para aprovação final */}
-            {detail.status === 'in_review' &&
-              (isAdmin || detail.created_by === user) &&
-              finalApprovers.length > 0 && (
-                <div className="action-bar" style={{ marginTop: 8 }}>
-                  <select value={finalApprover} onChange={event => setFinalApprover(event.target.value)}>
-                    <option value="">Aprovação final de… (opcional)</option>
-                    {finalApprovers.map(person => (
-                      <option key={person.id} value={person.id}>{person.full_name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="secondary"
-                    disabled={busy || !finalApprover}
-                    onClick={sendToFinalReview}
-                  >
-                    <ShieldCheck size={15} /> Aprovar e enviar p/ aprovação final
-                  </button>
-                </div>
-              )}
           </>
         )}
 
