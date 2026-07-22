@@ -14,7 +14,7 @@ export default function DriveGallery({ item = {} }) {
   );
 
   async function openFolder() {
-    const { data, error } = await supabase.functions.invoke('drive-manager', {
+    const { data, error } = await supabase.functions.invoke('drive-manage', {
       body: { action: 'get_folder', contentId: item.id }
     });
     if (error || !data?.folderUrl) {
