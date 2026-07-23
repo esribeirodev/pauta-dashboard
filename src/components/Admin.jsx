@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { ROLES } from '../constants';
+import './admin.css';
 
 /*
- * supabase.functions.invoke retorna uma mensagem genérica em erros non-2xx.
- * A mensagem real vem no corpo da resposta (error.context).
+ * supabase.functions.invoke retorna "Edge Function returned a non-2xx status code"
+ * em qualquer erro. A mensagem real vem no corpo da resposta (error.context).
+ * Lemos como texto + JSON.parse — mais robusto que .json() direto.
  */
 async function invokeAdmin(body) {
   const { data, error } = await supabase.functions.invoke('admin-users', { body });
@@ -12,8 +14,11 @@ async function invokeAdmin(body) {
   if (error) {
     let message = error.message;
     try {
-      const payload = await error.context.json();
-      if (payload?.error) message = payload.error;
+      const raw = await error.context?.text?.();
+      if (raw) {
+        const payload = JSON.parse(raw);
+        if (payload?.error) message = payload.error;
+      }
     } catch {
       /* mantém a mensagem genérica */
     }
@@ -29,18 +34,19 @@ export default function Admin({ users, clients, reload, setNotice }) {
   const [newClient, setNewClient] = useState('');
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const ok = text => setNotice(text);
+  const fail = text => setNotice({ type: 'error', text });
 
   async function toggleUser(user) {
     const action = user.active ? 'desativar' : 'reativar';
     if (!window.confirm(`Deseja ${action} o usuário "${user.full_name}"?`)) return;
 
     const { error } = await invokeAdmin({ action: 'set_active', userId: user.id, active: !user.active });
-    if (error) {
-      setNotice(error);
-      return;
-    }
+    if (error) return fail(error);
 
-    setNotice(user.active ? 'Usuário desativado com sucesso.' : 'Usuário reativado com sucesso.');
+    ok(user.active ? 'Usuário desativado com sucesso.' : 'Usuário reativado com sucesso.');
     await reload();
   }
 
@@ -48,12 +54,9 @@ export default function Admin({ users, clients, reload, setNotice }) {
     if (!window.confirm(`Excluir DEFINITIVAMENTE o usuário "${user.full_name}"? Essa ação não pode ser desfeita.`)) return;
 
     const { error } = await invokeAdmin({ action: 'delete', userId: user.id });
-    if (error) {
-      setNotice(error);
-      return;
-    }
+    if (error) return fail(error);
 
-    setNotice('Usuário excluído com sucesso.');
+    ok('Usuário excluído com sucesso.');
     await reload();
   }
 
@@ -64,13 +67,9 @@ export default function Admin({ users, clients, reload, setNotice }) {
   async function saveEdit(event) {
     event.preventDefault();
 
-    if (!editing.name.trim()) {
-      setNotice('O nome não pode ficar vazio.');
-      return;
-    }
+    if (!editing.name.trim()) return fail('O nome não pode ficar vazio.');
     if (editing.password && editing.password.length < 8) {
-      setNotice('A nova senha deve ter pelo menos 8 caracteres.');
-      return;
+      return fail('A nova senha deve ter pelo menos 8 caracteres.');
     }
 
     setBusy(true);
@@ -84,8 +83,7 @@ export default function Admin({ users, clients, reload, setNotice }) {
 
     if (error) {
       setBusy(false);
-      setNotice(error);
-      return;
+      return fail(error);
     }
 
     if (editing.password) {
@@ -97,7 +95,7 @@ export default function Admin({ users, clients, reload, setNotice }) {
 
       if (passwordError) {
         setBusy(false);
-        setNotice(`Perfil salvo, mas a senha não foi alterada: ${passwordError}`);
+        fail(`Perfil salvo, mas a senha não foi alterada: ${passwordError}`);
         setEditing(null);
         await reload();
         return;
@@ -105,7 +103,7 @@ export default function Admin({ users, clients, reload, setNotice }) {
     }
 
     setBusy(false);
-    setNotice('Usuário atualizado com sucesso.');
+    ok('Usuário atualizado com sucesso.');
     setEditing(null);
     await reload();
   }
@@ -114,13 +112,13 @@ export default function Admin({ users, clients, reload, setNotice }) {
     event.preventDefault();
 
     if (!newUser.email.trim() || !newUser.name.trim() || !newUser.password) {
-      alert('Preencha e-mail, nome e senha.');
-      return;
+      return fail('Preencha e-mail, nome e senha.');
     }
     if (newUser.password.length < 8) {
-      alert('A senha deve ter pelo menos 8 caracteres.');
-      return;
+      return fail('A senha deve ter pelo menos 8 caracteres.');
     }
+
+    setCreating(true);
 
     const { error } = await invokeAdmin({
       action: 'create',
@@ -130,12 +128,11 @@ export default function Admin({ users, clients, reload, setNotice }) {
       password: newUser.password
     });
 
-    if (error) {
-      alert(error);
-      return;
-    }
+    setCreating(false);
 
-    alert('Usuário criado com sucesso.');
+    if (error) return fail(error);
+
+    ok('Usuário criado com sucesso.');
     setNewUser({ email: '', name: '', role: 'design', password: '' });
     await reload();
   }
@@ -144,12 +141,10 @@ export default function Admin({ users, clients, reload, setNotice }) {
     event.preventDefault();
 
     const { error } = await supabase.from('clients').insert({ name: newClient, active: true });
-    if (error) {
-      setNotice(error.message);
-      return;
-    }
+    if (error) return fail(error.message);
 
     setNewClient('');
+    ok('Cliente adicionado com sucesso.');
     await reload();
   }
 
@@ -162,12 +157,9 @@ export default function Admin({ users, clients, reload, setNotice }) {
       .update({ active: !client.active, updated_at: new Date().toISOString() })
       .eq('id', client.id);
 
-    if (error) {
-      setNotice(error.message || 'Não foi possível alterar o cliente.');
-      return;
-    }
+    if (error) return fail(error.message || 'Não foi possível alterar o cliente.');
 
-    setNotice(client.active ? 'Cliente desativado com sucesso.' : 'Cliente reativado com sucesso.');
+    ok(client.active ? 'Cliente desativado com sucesso.' : 'Cliente reativado com sucesso.');
     await reload();
   }
 
@@ -180,11 +172,10 @@ export default function Admin({ users, clients, reload, setNotice }) {
       const friendly = error.code === '23503'
         ? 'Este cliente possui demandas vinculadas e não pode ser excluído. Desative-o em vez de excluir.'
         : error.message;
-      setNotice(friendly);
-      return;
+      return fail(friendly);
     }
 
-    setNotice('Cliente excluído com sucesso.');
+    ok('Cliente excluído com sucesso.');
     await reload();
   }
 
@@ -197,12 +188,9 @@ export default function Admin({ users, clients, reload, setNotice }) {
       .update({ name: name.trim(), updated_at: new Date().toISOString() })
       .eq('id', client.id);
 
-    if (error) {
-      setNotice(error.message);
-      return;
-    }
+    if (error) return fail(error.message);
 
-    setNotice('Cliente atualizado com sucesso.');
+    ok('Cliente atualizado com sucesso.');
     await reload();
   }
 
@@ -214,10 +202,10 @@ export default function Admin({ users, clients, reload, setNotice }) {
           Usuários com histórico (demandas, comentários) não podem ser excluídos — desative-os para bloquear o acesso.
         </p>
 
-        <div className="table">
+        <div>
           {users.map(user => (
             editing?.id === user.id ? (
-              <form className="row user-edit" key={user.id} onSubmit={saveEdit}>
+              <form className="user-edit" key={user.id} onSubmit={saveEdit}>
                 <input
                   required
                   placeholder="Nome completo"
@@ -240,41 +228,47 @@ export default function Admin({ users, clients, reload, setNotice }) {
                   value={editing.password}
                   onChange={e => setEditing({ ...editing, password: e.target.value })}
                 />
-                <button type="submit" className="primary" disabled={busy}>
-                  {busy ? 'Salvando…' : 'Salvar'}
-                </button>
-                <button type="button" className="secondary" onClick={() => setEditing(null)}>
-                  Cancelar
-                </button>
+                <div className="user-edit-actions">
+                  <button type="button" className="secondary" onClick={() => setEditing(null)}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className="primary" disabled={busy}>
+                    {busy ? 'Salvando…' : 'Salvar'}
+                  </button>
+                </div>
               </form>
             ) : (
-              <div className="row" key={user.id}>
-                <div className="title">
-                  <b>{user.full_name}</b>
-                  <small>{ROLES[user.role] || user.role}</small>
+              <div className="user-row" key={user.id}>
+                <div className="user-row-info">
+                  <div className="user-id">
+                    <strong>{user.full_name}</strong>
+                    <small>{ROLES[user.role] || user.role}</small>
+                  </div>
+                  <span className={user.active ? 'badge active' : 'badge inactive'}>
+                    {user.active ? 'Ativo' : 'Inativo'}
+                  </span>
                 </div>
-                <span className={user.active ? 'badge active' : 'badge inactive'}>
-                  {user.active ? 'Ativo' : 'Inativo'}
-                </span>
-                <button type="button" className="secondary" onClick={() => startEdit(user)}>
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className={user.active ? 'danger' : 'primary'}
-                  onClick={() => toggleUser(user)}
-                >
-                  {user.active ? 'Desativar' : 'Reativar'}
-                </button>
-                <button type="button" className="danger" onClick={() => deleteUser(user)}>
-                  Excluir
-                </button>
+                <div className="user-row-actions">
+                  <button type="button" className="secondary" onClick={() => startEdit(user)}>
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className={user.active ? 'danger' : 'primary'}
+                    onClick={() => toggleUser(user)}
+                  >
+                    {user.active ? 'Desativar' : 'Reativar'}
+                  </button>
+                  <button type="button" className="danger" onClick={() => deleteUser(user)}>
+                    Excluir
+                  </button>
+                </div>
               </div>
             )
           ))}
         </div>
 
-        <form onSubmit={createUser} className="form-grid">
+        <form onSubmit={createUser} className="user-create">
           <input
             required type="email" placeholder="E-mail" value={newUser.email}
             onChange={e => setNewUser({ ...newUser, email: e.target.value })}
@@ -292,11 +286,13 @@ export default function Admin({ users, clients, reload, setNotice }) {
             ))}
           </select>
           <input
-            required type="password" minLength="8" placeholder="Senha inicial"
+            required type="password" minLength="8" placeholder="Senha inicial (mín. 8 caracteres)"
             value={newUser.password}
             onChange={e => setNewUser({ ...newUser, password: e.target.value })}
           />
-          <button className="secondary">Criar usuário</button>
+          <button className="secondary" disabled={creating}>
+            {creating ? 'Criando…' : 'Criar usuário'}
+          </button>
         </form>
       </section>
 
