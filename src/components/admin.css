@@ -1,0 +1,27 @@
+/* ===== Área Administração — usuários (layout + estados de erro) ===== */
+
+.user-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 4px;border-top:1px solid var(--line)}
+.user-row-info{display:flex;align-items:center;gap:10px;min-width:0}
+.user-row-info .user-id{display:flex;flex-direction:column;min-width:0}
+.user-row-info strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-row-info small{color:var(--muted);margin-top:3px}
+.user-row-actions{display:flex;gap:8px;flex-shrink:0}
+.user-row-actions button{padding:8px 12px;font-size:12.5px}
+
+.user-edit{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:13px 4px;border-top:1px solid var(--line)}
+.user-edit input,.user-edit select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.user-edit-actions{grid-column:1/-1;display:flex;gap:8px;justify-content:flex-end}
+
+.user-create{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid var(--line)}
+.user-create input,.user-create select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.user-create button{grid-column:1/-1;justify-content:center}
+
+/* Toast de erro — o padrão do .toast é verde (sucesso) */
+.toast.error{background:var(--red)}
+
+@media(max-width:650px){
+  .user-row{flex-direction:column;align-items:flex-start}
+  .user-row-actions{width:100%}
+  .user-row-actions button{flex:1;justify-content:center}
+  .user-edit,.user-create{grid-template-columns:1fr}
+}
