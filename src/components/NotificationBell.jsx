@@ -6,13 +6,12 @@ const local = iso =>
   iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
 
 /*
- * v4 — dropdown viewport-aware + 3 formas de fechar:
+ * v5 — colunas alinhadas ao schema real do banco (title + body),
+ * dropdown viewport-aware + 3 formas de fechar:
  *   botão ✕, tecla Esc e clique fora (e o próprio sino faz toggle).
- *
- * AJUSTE AQUI se sua tabela usar outros nomes:
  */
 const TABLE = 'notifications';
-const COLS = { user: 'user_id', msg: 'message', read: 'read_at', created: 'created_at' };
+const COLS = { user: 'user_id', title: 'title', body: 'body', read: 'read_at', created: 'created_at' };
 
 const PANEL_WIDTH = 330;
 const MARGIN = 12;
@@ -156,7 +155,8 @@ export default function NotificationBell({ user, onOpenContent }) {
               className={`notif-item ${notification[COLS.read] ? '' : 'unread'}`}
               onClick={() => clickItem(notification)}
             >
-              <p>{notification[COLS.msg]}</p>
+              <p><b>{notification[COLS.title]}</b></p>
+              {notification[COLS.body] && <p>{notification[COLS.body]}</p>}
               <small>{local(notification[COLS.created])}</small>
             </div>
           ))}
