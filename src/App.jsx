@@ -17,6 +17,7 @@ import CalendarView from './components/CalendarView';
 import NewDemand from './components/NewDemand';
 import DemandDetail from './components/DemandDetail';
 import Admin from './components/Admin';
+import AdminWorkspaces from './components/AdminWorkspaces';
 import NotificationBell from './components/NotificationBell';
 import SearchOverlay from './components/SearchOverlay';
 import SettingsModal from './components/SettingsModal';
@@ -354,12 +355,15 @@ export default function App() {
           )}
 
           {tab === 'admin' && (
-            <Admin
-              users={users}
-              clients={adminClients}
-              reload={load}
-              setNotice={setNotice}
-            />
+            <>
+              <Admin
+                users={users}
+                clients={adminClients}
+                reload={load}
+                setNotice={setNotice}
+              />
+              <AdminWorkspaces users={users} setNotice={setNotice} />
+            </>
           )}
         </main>
       </div>
