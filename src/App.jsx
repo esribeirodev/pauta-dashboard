@@ -18,6 +18,8 @@ import NewDemand from './components/NewDemand';
 import DemandDetail from './components/DemandDetail';
 import Admin from './components/Admin';
 import NotificationBell from './components/NotificationBell';
+import SearchOverlay from './components/SearchOverlay';
+import SettingsModal from './components/SettingsModal';
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -32,6 +34,8 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [month, setMonth] = useState(new Date());
   const [selectedWorkspace, setSelectedWorkspace] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   /* Áreas de trabalho e permissões dinâmicas */
   const { workspaces } = usePermissions(session?.user?.id, profile?.role);
@@ -59,6 +63,18 @@ export default function App() {
   useEffect(() => {
     if (session) load();
   }, [session]);
+
+  /* Ctrl+K / Cmd+K abre a busca global */
+  useEffect(() => {
+    function onKeyDown(event) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setShowSearch(previous => !previous);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   async function load() {
     const [profileResult, clientsResult, allClientsResult, usersResult] = await Promise.all([
@@ -140,7 +156,7 @@ export default function App() {
     }
   }
 
-  /* Abrir demanda vinda de notificação: pode não estar na lista atual */
+  /* Abrir demanda vinda de notificação ou busca: pode não estar na lista atual */
   async function openFromNotification(contentId) {
     const exists = items.some(item => item.id === contentId);
 
@@ -236,9 +252,15 @@ export default function App() {
         )}
 
         <div className="header-actions">
-          <button className="icon"><Search /></button>
+          <button
+            className="icon"
+            title="Buscar demandas (Ctrl+K)"
+            onClick={() => setShowSearch(true)}
+          >
+            <Search />
+          </button>
           {userId && (
-            <NotificationBell user={userId} onOpen={openFromNotification} />
+            <NotificationBell user={userId} onOpenContent={openFromNotification} />
           )}
           <span className="user-pill">
             <b>{profile?.full_name}</b>
@@ -265,7 +287,9 @@ export default function App() {
             ))}
           </nav>
           <div className="aside-bottom">
-            <button><Settings size={17} />Configurações</button>
+            <button onClick={() => setShowSettings(true)}>
+              <Settings size={17} />Configurações
+            </button>
           </div>
         </aside>
 
@@ -359,6 +383,25 @@ export default function App() {
           users={users}
           close={() => setModal(null)}
           saved={refresh}
+        />
+      )}
+
+      {showSearch && (
+        <SearchOverlay
+          clientId={!creative ? selectedClient : undefined}
+          onOpen={async id => {
+            setShowSearch(false);
+            await openFromNotification(id);
+          }}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
+
+      {showSettings && userId && (
+        <SettingsModal
+          user={userId}
+          onClose={() => setShowSettings(false)}
+          onSaved={load}
         />
       )}
 
