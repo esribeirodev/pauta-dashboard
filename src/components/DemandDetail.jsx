@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Send, CornerUpLeft, CheckCircle2, PlayCircle, Archive, ShieldCheck } from 'lucide-react';
+import { X, Send, CornerUpLeft, CheckCircle2, PlayCircle, Archive, ShieldCheck, Trash2 } from 'lucide-react';
 import { supabase } from '../supabase';
 import { ITEM_SELECT } from '../constants';
 import CommentBox from './CommentBox';
@@ -103,6 +103,39 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
     setFinalApprover('');
     setBusy(false);
     await reload();
+  }
+
+  /*
+   * Exclusão (somente admin): soft delete via deleted_at.
+   * A demanda some das listas de todos, mas o histórico é preservado
+   * e a policy de SELECT do admin ainda permite auditoria.
+   */
+  async function deleteDemand() {
+    if (!window.confirm(`Excluir a demanda "${detail.title}"? Ela sairá das listas de todos os usuários.`)) return;
+
+    setBusy(true);
+
+    try {
+      await logEvent('archive', 'Demanda excluída pelo administrador.');
+    } catch (eventError) {
+      console.error(eventError);
+    }
+
+    const { error } = await supabase
+      .from('content_items')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', detail.id);
+
+    setBusy(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    const handleChanged = onChanged || saved;
+    if (handleChanged) await handleChanged();
+    close();
   }
 
   const startProduction = () =>
@@ -221,6 +254,14 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
               {(role === 'admin' || role === 'supervisora') && detail.status === 'done' && <button type="button" className="secondary" disabled={busy} onClick={archive}><Archive size={15} /> Arquivar</button>}
             </div>
           </>
+        )}
+
+        {role === 'admin' && (
+          <div className="action-bar" style={{ marginTop: 10, justifyContent: 'flex-end' }}>
+            <button type="button" className="danger" disabled={busy} onClick={deleteDemand}>
+              <Trash2 size={15} /> Excluir demanda
+            </button>
+          </div>
         )}
 
         {isCurrent && !isFinished && <CommentBox contentId={detail.id} user={user} onPosted={() => setTimelineKey(key => key + 1)} />}
