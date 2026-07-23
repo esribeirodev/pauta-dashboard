@@ -1,15 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, User, KeyRound, Save } from 'lucide-react';
 import { supabase } from '../supabase';
-
-const ROLE_LABEL = {
-  admin: 'Administrador',
-  supervisora: 'Supervisora',
-  midia: 'Mídia',
-  design: 'Design',
-  filmmaker: 'Filmmaker',
-  redator: 'Redator'
-};
+import { ROLES } from '../constants';
 
 /*
  * Configurações do usuário — sem mudança de banco.
@@ -96,7 +88,7 @@ export default function SettingsModal({ user, onClose, onSaved }) {
 
         <div className="settings-info">
           <p><b>E-mail:</b> {profile.email}</p>
-          <p><b>Cargo:</b> {ROLE_LABEL[profile.role] || profile.role}</p>
+          <p><b>Cargo:</b> {ROLES[profile.role] || profile.role}</p>
         </div>
 
         <label>
