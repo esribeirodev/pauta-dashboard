@@ -19,9 +19,34 @@
 /* Toast de erro — o padrão do .toast é verde (sucesso) */
 .toast.error{background:var(--red)}
 
+/* ===== Áreas de trabalho ===== */
+
+.admin-full{margin-top:18px}
+
+.ws-card{border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:14px}
+.ws-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
+.ws-head-title{display:flex;align-items:center;gap:10px;min-width:0}
+.ws-head-actions{display:flex;gap:8px;flex-shrink:0}
+.ws-head-actions button{padding:7px 11px;font-size:12.5px}
+
+.member-row{border-top:1px solid var(--line);padding:12px 0}
+.member-main{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.member-row select{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.member-row .danger{padding:7px 11px;font-size:12.5px}
+
+.flags{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:9px}
+.flag{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);cursor:pointer;user-select:none}
+.flag input{cursor:pointer}
+.flag.overridden{color:#b45309;font-weight:600}
+
+.ws-add-member{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
+.ws-add-member select{flex:1;min-width:170px;padding:8px 10px;border:1px solid var(--line);border-radius:7px;background:#fff}
+
 @media(max-width:650px){
   .user-row{flex-direction:column;align-items:flex-start}
   .user-row-actions{width:100%}
   .user-row-actions button{flex:1;justify-content:center}
   .user-edit,.user-create{grid-template-columns:1fr}
+  .ws-head{flex-direction:column;align-items:flex-start}
+  .ws-add-member select{min-width:100%}
 }
