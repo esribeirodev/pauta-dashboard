@@ -123,7 +123,7 @@ export default function App() {
       .order('due_at', { ascending: true, nullsFirst: false });
 
     if (error) {
-      setNotice(`Erro ao carregar demandas: ${error.message}`);
+      setNotice({ type: 'error', text: `Erro ao carregar demandas: ${error.message}` });
       setItems([]);
       return;
     }
@@ -139,7 +139,7 @@ export default function App() {
       .order('due_at', { ascending: true, nullsFirst: false });
 
     if (error) {
-      setNotice(`Erro ao carregar suas demandas: ${error.message}`);
+      setNotice({ type: 'error', text: `Erro ao carregar suas demandas: ${error.message}` });
       setItems([]);
       return;
     }
@@ -170,7 +170,7 @@ export default function App() {
       if (data) {
         setItems(previous => [data, ...previous.filter(item => item.id !== data.id)]);
       } else {
-        setNotice('Esta demanda não está mais disponível.');
+        setNotice({ type: 'error', text: 'Esta demanda não está mais disponível.' });
         return;
       }
     }
@@ -209,6 +209,9 @@ export default function App() {
     : items;
 
   const currentItem = items.find(item => item.id === modal?.id);
+
+  const noticeText = typeof notice === 'object' && notice !== null ? notice.text : notice;
+  const noticeIsError = typeof notice === 'object' && notice !== null && notice.type === 'error';
 
   return (
     <div className="shell">
@@ -405,8 +408,13 @@ export default function App() {
         />
       )}
 
-      {notice && (
-        <div className="toast" onClick={() => setNotice('')}>{notice}</div>
+      {noticeText && (
+        <div
+          className={noticeIsError ? 'toast error' : 'toast'}
+          onClick={() => setNotice('')}
+        >
+          {noticeText}
+        </div>
       )}
     </div>
   );
