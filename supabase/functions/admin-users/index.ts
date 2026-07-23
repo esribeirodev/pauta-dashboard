@@ -352,6 +352,24 @@ async function setUserActive(
   });
 }
 
+/*
+ * Tabelas que referenciam profiles com ON DELETE NO ACTION.
+ * Se houver qualquer registro, a exclusão é bloqueada de forma amigável
+ * ANTES de tocar no Auth (evita cascade quebrado e estados parciais).
+ */
+const historyChecks: Array<[string, string]> = [
+  ["content_items", "created_by"],
+  ["content_items", "current_assignee"],
+  ["content_items", "last_assignee"],
+  ["content_comments", "author_id"],
+  ["content_events", "actor_id"],
+  ["content_versions", "submitted_by"],
+  ["content_attachments", "uploaded_by"],
+  ["content_assignments", "assigned_to"],
+  ["content_assignments", "assigned_by"],
+  ["assignment_briefings", "created_by"],
+];
+
 async function deleteUser(
   adminClient: ReturnType<typeof createClient>,
   body: Record<string, unknown>,
@@ -372,7 +390,7 @@ async function deleteUser(
     error: targetProfileError,
   } = await adminClient
     .from("profiles")
-    .select("id")
+    .select("id, full_name")
     .eq("id", userId)
     .maybeSingle();
 
@@ -384,6 +402,36 @@ async function deleteUser(
     return json({ error: "Perfil do usuário não encontrado." }, 404);
   }
 
+  /*
+   * Verifica histórico vinculado antes de excluir.
+   */
+  for (const [table, column] of historyChecks) {
+    const { count, error: countError } = await adminClient
+      .from(table)
+      .select("*", { count: "exact", head: true })
+      .eq(column, userId);
+
+    if (countError) {
+      return json({ error: countError.message }, 400);
+    }
+
+    if ((count ?? 0) > 0) {
+      return json(
+        {
+          error:
+            `O usuário "${targetProfile.full_name}" possui histórico no sistema ` +
+            "(demandas, comentários, eventos ou arquivos) e não pode ser excluído. " +
+            "Use \"Desativar\" para bloquear o acesso preservando o histórico.",
+        },
+        409,
+      );
+    }
+  }
+
+  /*
+   * Sem histórico: exclui do Auth.
+   * profiles, notifications e workspace_members caem por cascade.
+   */
   const { error: authError } = await adminClient.auth.admin.deleteUser(userId);
 
   if (authError) {
@@ -391,25 +439,9 @@ async function deleteUser(
   }
 
   /*
-   * Caso não exista cascade no banco, remove o perfil manualmente.
+   * Garantia extra caso o cascade não exista.
    */
-  const { error: profileDeleteError } = await adminClient
-    .from("profiles")
-    .delete()
-    .eq("id", userId);
-
-  if (profileDeleteError) {
-    return json(
-      {
-        error:
-          `Usuário removido do Auth, mas o perfil não pôde ser excluído: ` +
-          `${profileDeleteError.message}. ` +
-          "Provavelmente possui demandas ou comentários vinculados — " +
-          "prefira desativar usuários com histórico.",
-      },
-      400,
-    );
-  }
+  await adminClient.from("profiles").delete().eq("id", userId);
 
   return json({
     success: true,
