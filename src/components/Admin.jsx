@@ -2,20 +2,41 @@ import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { ROLES } from '../constants';
 
+/*
+ * supabase.functions.invoke retorna uma mensagem genérica em erros non-2xx.
+ * A mensagem real vem no corpo da resposta (error.context).
+ */
+async function invokeAdmin(body) {
+  const { data, error } = await supabase.functions.invoke('admin-users', { body });
+
+  if (error) {
+    let message = error.message;
+    try {
+      const payload = await error.context.json();
+      if (payload?.error) message = payload.error;
+    } catch {
+      /* mantém a mensagem genérica */
+    }
+    return { error: message };
+  }
+
+  if (data?.error) return { error: data.error };
+  return { data };
+}
+
 export default function Admin({ users, clients, reload, setNotice }) {
   const [newUser, setNewUser] = useState({ email: '', name: '', role: 'design', password: '' });
   const [newClient, setNewClient] = useState('');
+  const [editing, setEditing] = useState(null);
+  const [busy, setBusy] = useState(false);
 
   async function toggleUser(user) {
     const action = user.active ? 'desativar' : 'reativar';
     if (!window.confirm(`Deseja ${action} o usuário "${user.full_name}"?`)) return;
 
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'set_active', userId: user.id, active: !user.active }
-    });
-
-    if (error || data?.error) {
-      setNotice(error?.message || data?.error || 'Não foi possível alterar o usuário.');
+    const { error } = await invokeAdmin({ action: 'set_active', userId: user.id, active: !user.active });
+    if (error) {
+      setNotice(error);
       return;
     }
 
@@ -26,16 +47,66 @@ export default function Admin({ users, clients, reload, setNotice }) {
   async function deleteUser(user) {
     if (!window.confirm(`Excluir DEFINITIVAMENTE o usuário "${user.full_name}"? Essa ação não pode ser desfeita.`)) return;
 
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'delete', userId: user.id }
-    });
-
-    if (error || data?.error) {
-      setNotice(error?.message || data?.error || 'Não foi possível excluir o usuário.');
+    const { error } = await invokeAdmin({ action: 'delete', userId: user.id });
+    if (error) {
+      setNotice(error);
       return;
     }
 
     setNotice('Usuário excluído com sucesso.');
+    await reload();
+  }
+
+  function startEdit(user) {
+    setEditing({ id: user.id, name: user.full_name || '', role: user.role, password: '' });
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault();
+
+    if (!editing.name.trim()) {
+      setNotice('O nome não pode ficar vazio.');
+      return;
+    }
+    if (editing.password && editing.password.length < 8) {
+      setNotice('A nova senha deve ter pelo menos 8 caracteres.');
+      return;
+    }
+
+    setBusy(true);
+
+    const { error } = await invokeAdmin({
+      action: 'update_profile',
+      userId: editing.id,
+      fullName: editing.name.trim(),
+      role: editing.role
+    });
+
+    if (error) {
+      setBusy(false);
+      setNotice(error);
+      return;
+    }
+
+    if (editing.password) {
+      const { error: passwordError } = await invokeAdmin({
+        action: 'set_password',
+        userId: editing.id,
+        password: editing.password
+      });
+
+      if (passwordError) {
+        setBusy(false);
+        setNotice(`Perfil salvo, mas a senha não foi alterada: ${passwordError}`);
+        setEditing(null);
+        await reload();
+        return;
+      }
+    }
+
+    setBusy(false);
+    setNotice('Usuário atualizado com sucesso.');
+    setEditing(null);
     await reload();
   }
 
@@ -51,18 +122,16 @@ export default function Admin({ users, clients, reload, setNotice }) {
       return;
     }
 
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: {
-        action: 'create',
-        email: newUser.email.trim(),
-        fullName: newUser.name.trim(),
-        role: newUser.role,
-        password: newUser.password
-      }
+    const { error } = await invokeAdmin({
+      action: 'create',
+      email: newUser.email.trim(),
+      fullName: newUser.name.trim(),
+      role: newUser.role,
+      password: newUser.password
     });
 
-    if (error || data?.error) {
-      alert(error?.message || data?.error || 'Não foi possível criar o usuário.');
+    if (error) {
+      alert(error);
       return;
     }
 
@@ -141,29 +210,67 @@ export default function Admin({ users, clients, reload, setNotice }) {
     <div className="admin-grid">
       <section className="panel">
         <h2>Usuários</h2>
-        <p className="hint">A criação segura de usuários utiliza uma Edge Function.</p>
+        <p className="hint">
+          Usuários com histórico (demandas, comentários) não podem ser excluídos — desative-os para bloquear o acesso.
+        </p>
 
         <div className="table">
           {users.map(user => (
-            <div className="row" key={user.id}>
-              <div className="title">
-                <b>{user.full_name}</b>
-                <small>{ROLES[user.role] || user.role}</small>
+            editing?.id === user.id ? (
+              <form className="row user-edit" key={user.id} onSubmit={saveEdit}>
+                <input
+                  required
+                  placeholder="Nome completo"
+                  value={editing.name}
+                  onChange={e => setEditing({ ...editing, name: e.target.value })}
+                />
+                <select
+                  value={editing.role}
+                  onChange={e => setEditing({ ...editing, role: e.target.value })}
+                >
+                  {Object.entries(ROLES).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+                <input
+                  type="password"
+                  minLength="8"
+                  placeholder="Nova senha (opcional)"
+                  autoComplete="new-password"
+                  value={editing.password}
+                  onChange={e => setEditing({ ...editing, password: e.target.value })}
+                />
+                <button type="submit" className="primary" disabled={busy}>
+                  {busy ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button type="button" className="secondary" onClick={() => setEditing(null)}>
+                  Cancelar
+                </button>
+              </form>
+            ) : (
+              <div className="row" key={user.id}>
+                <div className="title">
+                  <b>{user.full_name}</b>
+                  <small>{ROLES[user.role] || user.role}</small>
+                </div>
+                <span className={user.active ? 'badge active' : 'badge inactive'}>
+                  {user.active ? 'Ativo' : 'Inativo'}
+                </span>
+                <button type="button" className="secondary" onClick={() => startEdit(user)}>
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  className={user.active ? 'danger' : 'primary'}
+                  onClick={() => toggleUser(user)}
+                >
+                  {user.active ? 'Desativar' : 'Reativar'}
+                </button>
+                <button type="button" className="danger" onClick={() => deleteUser(user)}>
+                  Excluir
+                </button>
               </div>
-              <span className={user.active ? 'badge active' : 'badge inactive'}>
-                {user.active ? 'Ativo' : 'Inativo'}
-              </span>
-              <button
-                type="button"
-                className={user.active ? 'danger' : 'primary'}
-                onClick={() => toggleUser(user)}
-              >
-                {user.active ? 'Desativar' : 'Reativar'}
-              </button>
-              <button type="button" className="danger" onClick={() => deleteUser(user)}>
-                Excluir
-              </button>
-            </div>
+            )
           ))}
         </div>
 
