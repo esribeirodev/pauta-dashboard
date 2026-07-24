@@ -40,4 +40,5 @@ export const FORWARD_TARGETS = {
 export const ITEM_SELECT = `*,
   creator:profiles!created_by(id, full_name, role),
   assignee:profiles!current_assignee(id, full_name, role),
+  approver:profiles!current_approver(id, full_name, role),
   attachments:content_attachments(*)`;
