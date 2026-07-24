@@ -3,7 +3,9 @@ import ContentList from './ContentList';
 
 export default function Approvals({ items, user, open }) {
   const queue = items.filter(
-    item => item.status === 'in_review' && item.current_assignee === user
+    item =>
+      item.status === 'in_review' &&
+      (item.current_approver ? item.current_approver === user : item.current_assignee === user)
   );
 
   return (
