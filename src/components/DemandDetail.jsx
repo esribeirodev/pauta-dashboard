@@ -30,8 +30,13 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
   const [timelineKey, setTimelineKey] = useState(0);
 
   const isCurrent = detail.current_assignee === user;
+  /* Aprovador responsável: quem encaminhou por último para aprovação superior,
+     ou o criador da demanda (primeiro aprovador por regra de negócio). */
+  const currentApprover = detail.current_approver || detail.created_by;
   const canManageApproval = APPROVER_ROLES.includes(role) || detail.created_by === user;
-  const isFinalApproval = detail.status === 'in_review' && APPROVER_ROLES.includes(role);
+  const isFinalApproval =
+    detail.status === 'in_review' &&
+    (APPROVER_ROLES.includes(role) || currentApprover === user);
   const isFinished = detail.status === 'done' || detail.status === 'archived';
 
   const finalApprovers = people.filter(
@@ -142,7 +147,11 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
     updateStatus({ status: 'in_production' }, 'start', 'Iniciou a produção.');
 
   const sendToReview = () =>
-    updateStatus({ status: 'in_review' }, 'to_review', actionNote || 'Enviou para aprovação.');
+    updateStatus(
+      { status: 'in_review', current_assignee: currentApprover },
+      'to_review',
+      actionNote || 'Enviou para aprovação.'
+    );
 
   const forward = () => {
     if (!forwardTo) return alert('Escolha para quem encaminhar.');
@@ -180,14 +189,18 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
       .maybeSingle();
     if (lastReview?.actor_id) backTo = lastReview.actor_id;
 
-    updateStatus({ status: 'in_production', current_assignee: backTo }, 'request_changes', actionNote);
+    updateStatus(
+      { status: 'in_production', current_assignee: backTo, current_approver: user },
+      'request_changes',
+      actionNote
+    );
   };
 
   const sendToFinalReview = () => {
     if (!finalApprover) return alert('Escolha quem fará a aprovação final.');
     const target = people.find(person => person.id === finalApprover);
     updateStatus(
-      { current_assignee: finalApprover },
+      { current_assignee: finalApprover, current_approver: finalApprover },
       'first_approval',
       actionNote
         ? `Primeira aprovação registrada. Enviado para aprovação final de ${target?.full_name || 'gestor(a)'}. ${actionNote}`
@@ -246,7 +259,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
                 <button type="button" className="danger" disabled={busy || !actionNote.trim()} onClick={returnDemand}><CornerUpLeft size={15} /> Devolver</button>
               </>}
 
-              {isCurrent && detail.status === 'in_review' && detail.created_by === user && finalApprovers.length > 0 && <>
+              {isCurrent && detail.status === 'in_review' && currentApprover === user && finalApprovers.length > 0 && <>
                 <select value={finalApprover} onChange={event => setFinalApprover(event.target.value)}><option value="">Escolha a segunda pessoa…</option>{finalApprovers.map(person => <option key={person.id} value={person.id}>{person.full_name}</option>)}</select>
                 <button type="button" className="secondary" disabled={busy || !finalApprover || !actionNote.trim()} onClick={sendToFinalReview}><ShieldCheck size={15} /> Registrar 1ª aprovação e enviar</button>
               </>}
