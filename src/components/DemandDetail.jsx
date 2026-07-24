@@ -33,7 +33,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
   /* Aprovador responsável: quem encaminhou por último para aprovação superior,
      ou o criador da demanda (primeiro aprovador por regra de negócio). */
   const currentApprover = detail.current_approver || detail.created_by;
-  const canManageApproval = APPROVER_ROLES.includes(role) || detail.created_by === user;
+  const canManageApproval = APPROVER_ROLES.includes(role) || currentApprover === user;
   const isFinalApproval =
     detail.status === 'in_review' &&
     (APPROVER_ROLES.includes(role) || currentApprover === user);
@@ -148,7 +148,7 @@ export default function DemandDetail({ item, user, role, onClose, onChanged, clo
 
   const sendToReview = () =>
     updateStatus(
-      { status: 'in_review', current_assignee: currentApprover },
+      { status: 'in_review', current_assignee: currentApprover, current_approver: currentApprover },
       'to_review',
       actionNote || 'Enviou para aprovação.'
     );
