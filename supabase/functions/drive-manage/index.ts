@@ -234,6 +234,50 @@ Deno.serve(async (request: Request) => {
       return json({ success: true, attachment });
     }
 
+    if (action === "delete_file") {
+      const attachmentId = String(body.attachmentId || "");
+      if (!attachmentId) return json({ error: "attachmentId obrigatório." }, 400);
+
+      const { data: attachment } = await admin
+        .from("content_attachments")
+        .select("id, drive_file_id, file_name")
+        .eq("id", attachmentId)
+        .eq("content_id", item.id)
+        .maybeSingle();
+      if (!attachment) return json({ error: "Anexo não encontrado." }, 404);
+
+      /* Remove do Google Drive (404 = já não existe, segue em frente) */
+      if (attachment.drive_file_id) {
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${attachment.drive_file_id}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+        );
+        if (!res.ok && res.status !== 404) {
+          const detail = await res.text();
+          return json(
+            { error: "Falha ao remover do Drive: " + detail.slice(0, 200) },
+            500,
+          );
+        }
+      }
+
+      const { error } = await admin
+        .from("content_attachments")
+        .delete()
+        .eq("id", attachment.id);
+      if (error) return json({ error: error.message }, 400);
+
+      /* Evento no histórico (não-fatal se o tipo não for aceito) */
+      await admin.from("content_events").insert({
+        content_id: item.id,
+        actor_id: user.id,
+        event_type: "file_deleted",
+        comment: `Arquivo removido do Drive: ${attachment.file_name}`,
+      });
+
+      return json({ success: true });
+    }
+
     return json({ error: "Ação inválida." }, 400);
   } catch (error) {
     console.error(error);
