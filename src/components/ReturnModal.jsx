@@ -9,7 +9,7 @@ import { ROLES, CREATIVES } from '../constants';
  * 2) Devolver para um participante específico da demanda.
  * O seletor lista APENAS quem já participou (get_content_participants).
  * Regra de status: devolveu para criativo -> in_production;
- * devolveu para gestor -> permanece in_review.
+ * devolveu para gestor -> received (devolução NÃO é pedido de aprovação).
  */
 export default function ReturnModal({ item, user, close, done }) {
   const [participants, setParticipants] = useState([]);
@@ -45,7 +45,7 @@ export default function ReturnModal({ item, user, close, done }) {
 
     setBusy(true);
 
-    const nextStatus = CREATIVES.includes(person.role) ? 'in_production' : 'in_review';
+    const nextStatus = CREATIVES.includes(person.role) ? 'in_production' : 'received';
 
     const { error } = await supabase
       .from('content_items')
