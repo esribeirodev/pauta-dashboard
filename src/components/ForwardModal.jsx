@@ -46,7 +46,9 @@ export default function ForwardModal({ item, role, user, users, close, done }) {
       .update({
         current_assignee: targetId,
         status: nextStatus,
-        submitted_at: new Date().toISOString()
+        submitted_at: new Date().toISOString(),
+        /* Destino gestor em aprovação: ele passa a ser o aprovador responsável. */
+        ...(nextStatus === 'in_review' ? { current_approver: targetId } : {})
       })
       .eq('id', item.id);
 
